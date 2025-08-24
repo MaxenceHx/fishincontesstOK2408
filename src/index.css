@@ -1,0 +1,133 @@
+/* ===== Reset et base ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  background-color: #f0f7ff;
+  color: #333;
+}
+
+/* ===== Container ===== */
+.app-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* ===== Navigation ===== */
+nav {
+  background-color: #ffffff;
+  padding: 10px 20px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+nav button {
+  background-color: #0077cc;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+nav button:hover {
+  background-color: #005fa3;
+}
+
+/* ===== Sections ===== */
+h1,
+h2 {
+  margin-bottom: 10px;
+}
+
+h2 {
+  color: #0077cc;
+}
+
+div > input {
+  padding: 8px;
+  margin-right: 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  width: 200px;
+}
+
+button {
+  padding: 8px 15px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+button.create {
+  background-color: #28a745;
+  color: white;
+}
+
+button.create:hover {
+  background-color: #218838;
+}
+
+button.join {
+  background-color: #007bff;
+  color: white;
+}
+
+button.join:hover {
+  background-color: #0069d9;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+/* ===== Liste des concours ===== */
+ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+ul li button {
+  width: 100%;
+  text-align: left;
+  background-color: #e0f0ff;
+  margin-bottom: 5px;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+ul li button:hover {
+  background-color: #cce4ff;
+}
+
+/* ===== Retour ===== */
+button.back {
+  background-color: #ffc107;
+  color: #333;
+}
+
+button.back:hover {
+  background-color: #e0a800;
+}
+
+/* ===== Inputs ===== */
+input {
+  outline: none;
+}
+
+input:focus {
+  border-color: #0077cc;
+  box-shadow: 0 0 0 2px rgba(0, 119, 204, 0.2);
+}
