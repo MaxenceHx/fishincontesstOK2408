@@ -1,103 +1,112 @@
 // src/pages/InvitePage.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
 
 export default function InvitePage({ user }) {
-  // Lien générique vers l'application (page d'accueil / login)
-  const appLink = useMemo(() => {
-    if (typeof window === 'undefined') return '';
-    // tu peux pointer vers la racine ou une page de login si tu en as une
-    return `${window.location.origin}/`;
-  }, []);
+  const [contests, setContests] = useState([]);
+  const [busyCode, setBusyCode] = useState(null);
 
-  const [copied, setCopied] = useState(false);
+  const toast = (type, message) =>
+    window.dispatchEvent(new CustomEvent("app:toast", { detail: { type, message } }));
 
-  const copy = async () => {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // récupère tous les concours où l'utilisateur est membre
+      const { data: memberships } = await supabase
+        .from("contest_members")
+        .select("contest_code")
+        .eq("user_id", user.id);
+
+      const codes = (memberships || []).map((m) => m.contest_code);
+      if (!codes.length) {
+        setContests([]);
+        return;
+      }
+
+      const { data: items } = await supabase
+        .from("contests")
+        .select("name, code, created_by")
+        .in("code", codes);
+
+      if (!cancelled) setContests(items || []);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  function linkFor(code) {
+    return `${window.location.origin}/?join=${code}`;
+  }
+
+  async function copyLink(code) {
     try {
-      await navigator.clipboard.writeText(appLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch (e) {
-      console.error('Clipboard error:', e);
-      alert('Impossible de copier le lien.');
+      setBusyCode(code);
+      await navigator.clipboard.writeText(linkFor(code));
+      toast("success", "Lien copié ✅");
+    } catch {
+      toast("error", "Impossible de copier le lien.");
+    } finally {
+      setBusyCode(null);
     }
-  };
+  }
 
-  const sendMail = () => {
-    const subject = encodeURIComponent(
-      'Rejoins mon appli de concours de pêche !'
-    );
-    const body = encodeURIComponent(
-      `Salut !\n\nJ'utilise cette application pour organiser des concours de pêche entre amis.\nRejoins-nous ici : ${appLink}\n\nÀ+`
-    );
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-  };
+  async function nativeShare(code) {
+    const url = linkFor(code);
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "Rejoins mon concours de pêche",
+          text: "Clique pour rejoindre le concours 👇",
+          url,
+        });
+      } else {
+        await copyLink(code);
+      }
+    } catch {
+      /* cancel */
+    }
+  }
 
   return (
-    <div className="app-container" style={{ padding: 20 }}>
-      <h1>Inviter des amis</h1>
+    <div>
+      <h1 style={{ marginTop: 0 }}>Inviter des amis</h1>
+      {contests.length === 0 ? (
+        <div className="alert">Tu n’as pas encore de concours à partager.</div>
+      ) : (
+        <div className="grid" style={{ gap: 12 }}>
+          {contests.map((c) => (
+            <div className="card" key={c.code} style={{ display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{c.name}</div>
+                  <div className="kpi">Code: <code>{c.code}</code></div>
+                </div>
+                {c.created_by === user.id ? (
+                  <span className="badge">Organisateur</span>
+                ) : null}
+              </div>
 
-      <p>
-        Salut {user?.email || 'cher pêcheur'}, partage ce lien pour que tes amis{' '}
-        <b>créent un compte</b> et rejoignent l’application.
-      </p>
-
-      <div
-        style={{
-          marginTop: 16,
-          background: '#fff',
-          padding: 16,
-          borderRadius: 10,
-          boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-          display: 'flex',
-          gap: 10,
-          alignItems: 'center',
-          flexWrap: 'wrap',
-        }}
-      >
-        <input
-          readOnly
-          value={appLink}
-          style={{
-            flex: '1 1 320px',
-            minWidth: 260,
-            padding: '10px 12px',
-            borderRadius: 8,
-            border: '1px solid #ccc',
-          }}
-        />
-        <button
-          onClick={copy}
-          style={{
-            padding: '10px 12px',
-            borderRadius: 8,
-            border: 'none',
-            background: copied ? '#22c55e' : '#007bff',
-            color: '#fff',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          {copied ? 'Lien copié ✅' : 'Copier le lien'}
-        </button>
-
-        <button
-          onClick={sendMail}
-          style={{
-            padding: '10px 12px',
-            borderRadius: 8,
-            border: 'none',
-            background: '#ff9800',
-            color: '#fff',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          Envoyer par e-mail
-        </button>
-      </div>
-
-      <p style={{ marginTop: 12, fontSize: 14, opacity: 0.8 }}>
-        Astuce : tu peux coller ce lien dans WhatsApp, SMS, Messenger, etc.
+              <div className="grid" style={{ gap: 8 }}>
+                <input className="input" readOnly value={linkFor(c.code)} />
+                <div className="btn-group">
+                  <button
+                    className={`btn btn-outline ${busyCode === c.code ? "is-loading" : ""}`}
+                    onClick={() => copyLink(c.code)}
+                    disabled={busyCode === c.code}
+                  >
+                    Copier le lien
+                  </button>
+                  <button className="btn btn-primary" onClick={() => nativeShare(c.code)}>
+                    Partager
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="kpi" style={{ marginTop: 10 }}>
+        Le lien contient le code <b>?join=CODE</b>. Quand ton ami l’ouvre connecté, il rejoint automatiquement.
       </p>
     </div>
   );

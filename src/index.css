@@ -1,133 +1,149 @@
-/* ===== Reset et base ===== */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+/* ========= UI KIT LÉGER — v2 (sans Tailwind) ========= */
+:root{
+  --bg:#f8fafc; --fg:#0f172a; --muted:#64748b;
+  --primary:#0ea5e9; --primary-600:#0284c7; --primary-700:#0369a1;
+  --secondary:#6366f1; --secondary-600:#4f46e5;
+  --danger:#ef4444; --danger-600:#dc2626;
+  --success:#16a34a; --success-600:#15803d;
+  --warning:#f59e0b; --warning-700:#b45309;
+  --card:#ffffff; --border:#e5e7eb;
+  --radius:12px; --shadow:0 8px 24px rgba(2,8,23,.08);
+  --ring:0 0 0 4px #e0f2fe;
 }
 
-body {
-  background-color: #f0f7ff;
-  color: #333;
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
+a{color:var(--primary-600);text-decoration:none}
+a:hover{text-decoration:underline}
+
+.container{max-width:1120px;margin:0 auto;padding:16px}
+
+/* ====== CARDS / BADGES / TABLE / FORMS ====== */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px}
+.badge{font-size:12px;padding:2px 8px;border-radius:999px;background:#e2e8f0;color:#334155;display:inline-flex;align-items:center;gap:6px}
+.kpi{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}
+
+.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);background:#fff}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 8px;border-bottom:1px solid #f1f5f9;text-align:left}
+thead th{background:#f8fafc;font-weight:700}
+.t-right{text-align:right}.t-center{text-align:center}
+
+.input, .select, input[type="text"], input[type="number"], input[type="email"], input[type="datetime-local"], select, textarea{
+  width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;outline:none;
+}
+.input:focus, .select:focus, input:focus, select:focus, textarea:focus{box-shadow:var(--ring);border-color:#bae6fd}
+label{font-weight:600;display:block;margin-bottom:6px}
+.grid{display:grid;gap:12px}
+.grid-2{grid-template-columns:1fr 1fr}
+@media (max-width: 768px){
+  .grid-2{grid-template-columns:1fr}
+  .container{padding:12px}
 }
 
-/* ===== Container ===== */
-.app-container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
+/* ====== NAVBAR ====== */
+.navbar{position:sticky;top:0;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);z-index:50}
+.navbar-inner{display:flex;align-items:center;justify-content:space-between;height:56px;gap:12px;padding:0 16px}
+.nav-links{display:flex;gap:8px;flex-wrap:wrap}
+.nav-links a,.nav-links button{border:none;background:transparent;padding:8px 10px;border-radius:10px;cursor:pointer;color:var(--fg);font-weight:600}
+.nav-links a:hover,.nav-links button:hover{background:#f1f5f9}
+.hide-sm{display:block}
+@media (max-width: 768px){ .hide-sm{display:none} .navbar-inner{height:52px} }
+
+/* ====== BOUTONS — NORMALISATION GLOBALE ======
+   On force un style cohérent même si des styles inline existent.
+   Les variantes .btn-* passent par dessus. */
+button, .btn, a.btn, input[type="button"], input[type="submit"]{
+  appearance:none;
+  display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+  padding:10px 14px !important;
+  border-radius:10px !important;
+  border:1px solid var(--border) !important;
+  background:#fff !important;
+  color:var(--fg) !important;
+  font-weight:600; line-height:1.1; text-decoration:none;
+  cursor:pointer; user-select:none;
+  box-shadow:0 1px 0 rgba(2,8,23,.02);
+  transition:background .15s ease, transform .02s ease, box-shadow .15s ease, border-color .15s ease, color .15s ease;
+}
+button:hover, .btn:hover, a.btn:hover, input[type="button"]:hover, input[type="submit"]:hover{
+  background:#f8fafc !important;
+}
+button:active, .btn:active, a.btn:active{ transform:translateY(1px); }
+button:focus-visible, .btn:focus-visible, a.btn:focus-visible{
+  outline:none; box-shadow:var(--ring);
+}
+button[disabled], .btn[disabled], a.btn[aria-disabled="true"], input[disabled]{
+  opacity:.6; cursor:not-allowed; box-shadow:none;
 }
 
-/* ===== Navigation ===== */
-nav {
-  background-color: #ffffff;
-  padding: 10px 20px;
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  display: flex;
-  gap: 15px;
-  margin-bottom: 20px;
+/* ====== VARIANTES ====== */
+.btn-primary{ background:var(--primary) !important; color:#fff !important; border:none !important; }
+.btn-primary:hover{ background:var(--primary-600) !important; }
+.btn-primary:active{ background:var(--primary-700) !important; }
+
+.btn-secondary{ background:var(--secondary) !important; color:#fff !important; border:none !important; }
+.btn-secondary:hover{ background:var(--secondary-600) !important; }
+
+.btn-danger{ background:var(--danger) !important; color:#fff !important; border:none !important; }
+.btn-danger:hover{ background:var(--danger-600) !important; }
+
+.btn-success{ background:var(--success) !important; color:#fff !important; border:none !important; }
+.btn-success:hover{ background:var(--success-600) !important; }
+
+.btn-warning{ background:var(--warning) !important; color:#111827 !important; border:none !important; }
+.btn-warning:hover{ background:#fbbf24 !important; }
+
+.btn-outline{ background:transparent !important; color:var(--primary-600) !important; border:1px solid var(--primary-600) !important; }
+.btn-outline:hover{ background:#e0f2fe !important; }
+
+.btn-ghost{ background:transparent !important; color:var(--fg) !important; border-color:transparent !important; }
+.btn-ghost:hover{ background:#f1f5f9 !important; }
+
+.btn-soft{ background:#eff6ff !important; color:#1e40af !important; border-color:#bfdbfe !important; }
+.btn-soft:hover{ background:#e0f2fe !important; }
+
+/* Liens stylés comme des boutons */
+a.btn{ text-decoration:none }
+
+/* Tailles & formes */
+.btn-sm{ padding:8px 10px !important; font-size:.875rem }
+.btn-lg{ padding:12px 18px !important; font-size:1.05rem }
+.btn-block{ width:100% }
+.btn-icon{ width:40px !important; height:40px !important; padding:0 !important; display:inline-grid; place-items:center }
+
+/* Groupes */
+.btn-group{ display:flex; gap:8px; flex-wrap:wrap }
+
+/* État chargement (spinner) */
+@keyframes spin{ to{ transform:rotate(360deg) } }
+.btn.is-loading{ pointer-events:none; position:relative; opacity:.9 }
+.btn.is-loading::after{
+  content:""; width:1em; height:1em; border-radius:999px;
+  border:2px solid rgba(255,255,255,.6); border-top-color:rgba(255,255,255,1);
+  display:inline-block; animation:spin .8s linear infinite; margin-left:.5rem;
+}
+.btn.btn-outline.is-loading::after,
+.btn.btn-ghost.is-loading::after,
+.btn:not([class*="btn-"]).is-loading::after{
+  border-color: rgba(2,8,23,.25); border-top-color: rgba(2,8,23,.6);
 }
 
-nav button {
-  background-color: #0077cc;
-  color: white;
-  border: none;
-  padding: 8px 15px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
+/* ====== NAV LINKS PASSENT PAR DESSUS (style “onglet”) ======
+   On conserve leur look discret malgré la normalisation globale */
+.nav-links a, .nav-links button{
+  background:transparent !important; border:none !important; padding:8px 10px !important; color:var(--fg) !important;
 }
+.nav-links a:hover, .nav-links button:hover{ background:#f1f5f9 !important }
 
-nav button:hover {
-  background-color: #005fa3;
-}
+/* ====== ALERTES / TOASTS (si tu veux basculer en classes plus tard) ====== */
+.alert{padding:10px 12px;border-radius:10px;border:1px solid #e2e8f0;background:#f8fafc;color:#334155}
+.alert-success{border-color:#bbf7d0;background:#ecfdf5;color:#14532d}
+.alert-error{border-color:#fecaca;background:#fef2f2;color:#7f1d1d}
+.alert-warning{border-color:#fde68a;background:#fffbeb;color:#723b13}
 
-/* ===== Sections ===== */
-h1,
-h2 {
-  margin-bottom: 10px;
-}
-
-h2 {
-  color: #0077cc;
-}
-
-div > input {
-  padding: 8px;
-  margin-right: 10px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-  width: 200px;
-}
-
-button {
-  padding: 8px 15px;
-  border-radius: 5px;
-  border: none;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-button.create {
-  background-color: #28a745;
-  color: white;
-}
-
-button.create:hover {
-  background-color: #218838;
-}
-
-button.join {
-  background-color: #007bff;
-  color: white;
-}
-
-button.join:hover {
-  background-color: #0069d9;
-}
-
-button:hover {
-  opacity: 0.9;
-}
-
-/* ===== Liste des concours ===== */
-ul {
-  list-style: none;
-  padding-left: 0;
-}
-
-ul li button {
-  width: 100%;
-  text-align: left;
-  background-color: #e0f0ff;
-  margin-bottom: 5px;
-  padding: 10px;
-  border-radius: 5px;
-}
-
-ul li button:hover {
-  background-color: #cce4ff;
-}
-
-/* ===== Retour ===== */
-button.back {
-  background-color: #ffc107;
-  color: #333;
-}
-
-button.back:hover {
-  background-color: #e0a800;
-}
-
-/* ===== Inputs ===== */
-input {
-  outline: none;
-}
-
-input:focus {
-  border-color: #0077cc;
-  box-shadow: 0 0 0 2px rgba(0, 119, 204, 0.2);
+/* ====== PRÉFÉRENCES MOUVEMENT ====== */
+@media (prefers-reduced-motion: reduce){
+  *{transition:none !important; animation:none !important}
 }

@@ -1,208 +1,197 @@
 // src/components/Auth.jsx
-import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import React, { useState } from "react";
+import { supabase } from "../lib/supabase";
 
 export default function Auth({ onLogin }) {
-  const [mode, setMode] = useState('login'); // "login" | "signup"
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [loading, setLoading] = useState(false);
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const [mode, setMode] = useState("password"); // 'password' | 'magic'
+  const [isSignup, setIsSignup] = useState(false);
 
-  const checkUsernameAvailable = async (name) => {
-    if (!name) return false;
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('username', name)
-      .limit(1);
-    if (error) {
-      console.error('Erreur vérif pseudo:', error);
-      return false;
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [desiredUsername, setDesiredUsername] = useState("");
+
+  const [busy, setBusy] = useState(false);
+
+  const toast = (type, message) =>
+    window.dispatchEvent(new CustomEvent("app:toast", { detail: { type, message } }));
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!email.trim()) {
+      toast("error", "Entre ton email.");
+      return;
     }
-    return (data?.length || 0) === 0;
-  };
-
-  // 🔐 Connexion (inchangé, OK déjà en OTP)
-  const login = async () => {
-    if (!email) return alert('Entre ton e-mail.');
+    setBusy(true);
     try {
-      setLoading(true);
-      const { error } = await supabase.auth.signInWithOtp({email});
-      if (error) throw error;
-      alert('Mail envoyé ! Clique le lien pour te connecter.');
+      if (mode === "magic") {
+        const { error } = await supabase.auth.signInWithOtp({
+          email: email.trim(),
+          options: { emailRedirectTo: window.location.origin + "/" },
+        });
+        if (error) throw error;
+        toast("success", "Lien magique envoyé ✉️. Vérifie ta boîte mail.");
+        return;
+      }
+
+      // mode password
+      if (isSignup) {
+        if (!password) {
+          toast("error", "Choisis un mot de passe.");
+          return;
+        }
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { desired_username: desiredUsername || null },
+            emailRedirectTo: window.location.origin + "/",
+          },
+        });
+        if (error) throw error;
+        if (data.session) {
+          toast("success", "Compte créé ✅");
+          onLogin?.(data.session.user);
+        } else {
+          toast("success", "Inscription réussie. Confirme l’email pour te connecter.");
+        }
+        return;
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (error) throw error;
+        toast("success", "Connexion réussie ✅");
+        onLogin?.(data.user);
+      }
     } catch (e) {
       console.error(e);
-      alert('Impossible d’envoyer le mail de connexion.');
+      toast("error", e.message || "Échec de l’authentification.");
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  };
+  }
 
-  // 🆕 Création (utiliser OTP aussi, pas signUp)
-  const signup = async () => {
-    if (!email) return alert('Entre ton e-mail.');
-    if (!username.trim()) return alert('Choisis un pseudo.');
+  async function handleReset() {
+    if (!email.trim()) {
+      toast("error", "Entre ton email d’abord.");
+      return;
+    }
+    setBusy(true);
     try {
-      setLoading(true);
-
-      // Vérifier l’unicité du pseudo avant d’envoyer le mail
-      const { data: exists, error: checkErr } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', username.trim())
-        .limit(1);
-
-      if (checkErr) {
-        console.error(checkErr);
-        alert('Erreur lors de la vérification du pseudo.');
-        setLoading(false);
-        return;
-      }
-      if ((exists?.length || 0) > 0) {
-        alert('Ce pseudo est déjà pris.');
-        setLoading(false);
-        return;
-      }
-
-      // ✅ Envoyer un magic link avec le pseudo souhaité dans user_metadata
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: origin,
-          data: { desired_username: username.trim() },
-        },
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin + "/",
       });
       if (error) throw error;
-
-      alert('Mail envoyé ! Clique le lien pour confirmer la création.');
+      toast("success", "Email de réinitialisation envoyé ✉️");
     } catch (e) {
-      console.error(e);
-      alert('Impossible d’envoyer le mail de création.');
+      toast("error", e.message || "Impossible d’envoyer l’email.");
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  };
+  }
 
   return (
-    <div
-      className="app-container"
-      style={{
-        minHeight: '100vh',
-        display: 'grid',
-        placeItems: 'center',
-        background: '#f0f7ff',
-        padding: 20,
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 420,
-          background: '#fff',
-          padding: 20,
-          borderRadius: 12,
-          boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
-        }}
-      >
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+    <div className="container" style={{ maxWidth: 520 }}>
+      <div className="card">
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <span className="badge" style={{ background: "#dbeafe", color: "#1e3a8a" }}>🎣</span>
+          <h1 style={{ margin: 0 }}>FishingContest</h1>
+        </div>
+
+        {/* Tabs */}
+        <div className="btn-group" style={{ marginBottom: 12 }}>
           <button
-            onClick={() => setMode('login')}
-            style={{
-              flex: 1,
-              padding: '10px 12px',
-              borderRadius: 8,
-              border: '1px solid #ccc',
-              background: mode === 'login' ? '#e6f0ff' : '#f6f6f6',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
+            className={`btn ${mode === "password" ? "btn-soft" : "btn-ghost"}`}
+            onClick={() => setMode("password")}
           >
-            Se connecter
+            Email + mot de passe
           </button>
           <button
-            onClick={() => setMode('signup')}
-            style={{
-              flex: 1,
-              padding: '10px 12px',
-              borderRadius: 8,
-              border: '1px solid #ccc',
-              background: mode === 'signup' ? '#e6f0ff' : '#f6f6f6',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
+            className={`btn ${mode === "magic" ? "btn-soft" : "btn-ghost"}`}
+            onClick={() => setMode("magic")}
           >
-            Créer un compte
+            Lien magique
           </button>
         </div>
 
-        <div style={{ display: 'grid', gap: 12 }}>
+        <form onSubmit={handleSubmit} className="grid" style={{ gap: 12 }}>
           <div>
-            <label
-              style={{ fontWeight: 600, display: 'block', marginBottom: 6 }}
-            >
-              E-mail
-            </label>
+            <label>Email</label>
             <input
+              className="input"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="ton@mail.com"
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: 8,
-                border: '1px solid #ccc',
-              }}
+              placeholder="ton@email.com"
             />
           </div>
 
-          {mode === 'signup' && (
-            <div>
-              <label
-                style={{ fontWeight: 600, display: 'block', marginBottom: 6 }}
-              >
-                Pseudo (unique)
-              </label>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Ex: BigFisher42"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  border: '1px solid #ccc',
-                }}
-              />
-              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                Le pseudo sera figé après création (non modifiable).
+          {mode === "password" && (
+            <>
+              {isSignup && (
+                <div>
+                  <label>Nom d’utilisateur (optionnel)</label>
+                  <input
+                    className="input"
+                    value={desiredUsername}
+                    onChange={(e) => setDesiredUsername(e.target.value)}
+                    placeholder="pseudo"
+                  />
+                </div>
+              )}
+              <div>
+                <label>Mot de passe</label>
+                <input
+                  className="input"
+                  type="password"
+                  autoComplete={isSignup ? "new-password" : "current-password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
               </div>
-            </div>
+
+              <div className="btn-group" style={{ justifyContent: "space-between" }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setIsSignup((v) => !v)}
+                >
+                  {isSignup ? "J’ai déjà un compte" : "Créer un compte"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={handleReset}
+                  disabled={busy}
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
+            </>
           )}
 
-          <button
-            disabled={loading}
-            onClick={mode === 'login' ? login : signup}
-            style={{
-              padding: '12px 14px',
-              borderRadius: 8,
-              border: 'none',
-              background: '#007bff',
-              color: '#fff',
-              fontWeight: 700,
-              cursor: 'pointer',
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading
-              ? 'Envoi en cours…'
-              : mode === 'login'
-              ? 'Recevoir le lien de connexion'
-              : 'Recevoir le lien de création'}
-          </button>
-        </div>
+          <div className="btn-group" style={{ justifyContent: "flex-end" }}>
+            <button
+              className={`btn btn-primary ${busy ? "is-loading" : ""}`}
+              disabled={busy}
+              type="submit"
+            >
+              {mode === "magic"
+                ? "Envoyer le lien"
+                : isSignup
+                ? "Créer le compte"
+                : "Se connecter"}
+            </button>
+          </div>
+        </form>
       </div>
+
+      <p className="kpi" style={{ textAlign: "center", marginTop: 12 }}>
+        En te connectant, tu acceptes notre fonctionnement. Aucune donnée sensible n’est collectée.
+      </p>
     </div>
   );
 }
