@@ -1,6 +1,7 @@
 // src/App.jsx
 import React, { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
+import { startAuthKeepAlive } from './lib/supabase';
 
 // Composants / Pages
 import Auth from './components/Auth';
@@ -82,6 +83,10 @@ export default function App() {
         const u = data?.session?.user ?? null;
         if (u) await ensureProfile(u);
         if (!cancelled) setUser(u);
+        if (data?.session?.user) {
+        // démarre/renouvelle le keep-alive (5 min)
+          startAuthKeepAlive();
+        }
       } catch (e) {
         console.log('getSession crash', e?.message || String(e));
       } finally {
@@ -101,6 +106,10 @@ export default function App() {
       if (!cancelled) {
         setUser(u);
         setAuthReady(true);
+      }
+      if (session?.user) {
+        // utilisateur connecté : on (re)lance le keep-alive
+        startAuthKeepAlive();
       }
     });
 
