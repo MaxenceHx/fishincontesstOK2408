@@ -11,11 +11,21 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    multiTab: false,              // pas de BroadcastChannel inter-onglets
-    storage,                      // 👉 par onglet (pas partagé)
-    storageKey: "fc_auth_dev_v1", // clé de session (namespace)
+    multiTab: true, // meilleure stabilité si l'user ouvre plusieurs vues
+    storage: typeof window !== "undefined" ? window.localStorage : undefined,
+    storageKey: "fc_auth_v1", // 👈 garde cette clé partout (web + mobile)
   },
 });
 
+// Keep-alive léger pour forcer un refresh si nécessaire (toutes les 5 min)
+let _keepAliveTimer;
+export function startAuthKeepAlive() {
+  clearInterval(_keepAliveTimer);
+  _keepAliveTimer = setInterval(() => {
+    supabase.auth.getSession().catch(() => {});
+  }, 5 * 60 * 1000);
+}
+
 console.log("SUPABASE_URL:", SUPABASE_URL ? "✅ OK" : "❌ MISSING");
 console.log("SUPABASE_KEY:", SUPABASE_ANON_KEY ? "✅ OK" : "❌ MISSING");
+
