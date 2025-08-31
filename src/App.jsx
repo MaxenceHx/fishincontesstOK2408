@@ -458,6 +458,3 @@ function InviteContent() {
       </div>
     </div>
   );
-
-  // commentaire
-  
