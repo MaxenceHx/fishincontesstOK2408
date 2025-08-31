@@ -1,238 +1,145 @@
 // src/App.jsx
 import React, { useEffect, useState } from 'react';
-import { supabase } from './lib/supabase';
-import { startAuthKeepAlive } from './lib/supabase';
+import { supabase } from './lib/supabase.js';
 
-// Composants / Pages
-import Auth from './components/Auth';
-import NavBar from './components/NavBar.jsx';
-import ContestPage from './pages/ContestPage';
-import InvitePage from './pages/InvitePage';
-import ProfilePage from './pages/ProfilePage';
-import ContestConfig from './pages/ContestConfig';
-import MyCatches from './pages/MyCatches';
+import Auth from './components/Auth.jsx';
+import ContestPage from './pages/ContestPage.jsx';
+import DiscoverPage from './pages/DiscoverPage.jsx';
+import ActivityPage from './pages/ActivityPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
+import BottomNav from './components/BottomNav.jsx';
+import Modal from './components/Modal.jsx';
+import CreateContestWizard from './components/CreateContestWizard.jsx';
+
+// --- helpers UI ---
+const Card = ({ children }) => (
+  <div
+    style={{
+      background: '#fff',
+      borderRadius: 12,
+      padding: 14,
+      boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
+    }}
+  >
+    {children}
+  </div>
+);
 
 export default function App() {
-  // --- Auth & navigation ---
+  // auth
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
-  const [currentPage, setCurrentPage] = useState('home'); // 'home' | 'invite' | 'profile' | 'config' | 'mycatches'
 
-  // --- Concours ---
-  const [contests, setContests] = useState([]); // [{name, code, rules, category}]
-  const [activeContest, setActiveContest] = useState(null);
-  const [newContestName, setNewContestName] = useState('');
-  const [draftContestName, setDraftContestName] = useState('');
+  // nav
+  const [tab, setTab] = useState('home'); // 'home' | 'discover' | 'activity' | 'profile'
+  const [activeContest, setActiveContest] = useState(null); // {code,name}
+
+  // data
+  const [contests, setContests] = useState([]);
+
+  // modales
+  const [openCreate, setOpenCreate] = useState(false);
+  const [openJoin, setOpenJoin] = useState(false);
+  const [openInvite, setOpenInvite] = useState(false);
+
+  // forms
   const [joinContestName, setJoinContestName] = useState('');
 
-  // --- Profil ---
-  const [profile, setProfile] = useState(null);
-
-  // --- Toasts (globaux) ---
-  const [toasts, setToasts] = useState([]);
-  useEffect(() => {
-    const handler = (e) => {
-      const { type = 'info', message = '' } = e.detail || {};
-      const id = Date.now() + Math.random();
-      setToasts((prev) => [...prev, { id, type, message }]);
-      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 2600);
-    };
-    window.addEventListener('app:toast', handler);
-    return () => window.removeEventListener('app:toast', handler);
-  }, []);
-  const toast = (type, message) =>
-    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type, message } }));
+  // états liste concours
+  const [joinedCodes, setJoinedCodes] = useState(new Set()); // Set des codes auxquels je participe
+  const [isLoadingContests, setIsLoadingContests] = useState(false);
 
   // ---------------------------
-  // Helpers
-  // ---------------------------
-  async function ensureProfile(sessionUser) {
-    if (!sessionUser) return;
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', sessionUser.id)
-      .single();
-
-    if (!existing) {
-      const desired = sessionUser.user_metadata?.desired_username ?? null;
-      const { error: insErr } = await supabase.from('profiles').insert([
-        { id: sessionUser.id, email: sessionUser.email, username: desired },
-      ]);
-      if (insErr) console.warn('Insert profile warn:', insErr.message);
-    }
-  }
-
-  const hardResetSession = () => {
-    try {
-      if (typeof window !== 'undefined') sessionStorage.removeItem('fc_auth_dev_v1');
-    } catch {}
-    window.location.reload();
-  };
-
-  // ---------------------------
-  // Auth init + listeners
+  // Auth init + listener
   // ---------------------------
   useEffect(() => {
     let cancelled = false;
-
     const init = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) console.log('getSession error', error);
+        const { data } = await supabase.auth.getSession();
         const u = data?.session?.user ?? null;
-        if (u) await ensureProfile(u);
         if (!cancelled) setUser(u);
-        if (data?.session?.user) {
-        // démarre/renouvelle le keep-alive (5 min)
-          startAuthKeepAlive();
-        }
-      } catch (e) {
-        console.log('getSession crash', e?.message || String(e));
       } finally {
-        if (!cancelled) {
-          // Nettoie le hash OAuth si présent
-          if (window.location.hash) {
-            window.history.replaceState({}, '', window.location.pathname + window.location.search);
-          }
-          setAuthReady(true);
+        if (typeof window !== 'undefined' && window.location.hash) {
+          window.history.replaceState({}, '', window.location.pathname + window.location.search);
         }
+        if (!cancelled) setAuthReady(true);
       }
     };
-
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_evt, session) => {
-      const u = session?.user ?? null;
-      if (u) await ensureProfile(u);
-      if (!cancelled) {
-        setUser(u);
-        setAuthReady(true);
-      }
-      if (session?.user) {
-        // utilisateur connecté : on (re)lance le keep-alive
-        startAuthKeepAlive();
-      }
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setUser(session?.user ?? null);
+      setAuthReady(true);
     });
-
     init();
-    return () => {
-      cancelled = true;
-      sub.subscription.unsubscribe();
-    };
+    return () => sub.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!user?.id) return;
-    fetchContests();
-    loadProfile();
-  }, [user?.id]);
-
-  const fetchContests = async () => {
-    if (!user?.id) return;
+  // fetch mes concours
+  const fetchMyContests = async () => {
     try {
-      const { data, error } = await supabase
+      setIsLoadingContests(true);
+
+      // 1) Mes adhésions -> codes
+      const { data: memberships, error: memErr } = await supabase
         .from('contest_members')
         .select('contest_code')
         .eq('user_id', user.id);
-      if (error) return;
+      if (memErr) throw memErr;
 
-      const withNames = await Promise.all(
-        (data || []).map(async (row) => {
-          const { data: c } = await supabase
-            .from('contests')
-            .select('name, code, rules, category')
-            .eq('code', row.contest_code)
-            .single();
-          return c ? c : { name: 'Nom inconnu', code: row.contest_code, rules: {}, category: 'custom' };
-        })
-      );
-      setContests(withNames);
-    } catch (e) {
-      // noop
-    }
-  };
+      const codes = (memberships || []).map((m) => m.contest_code);
+      setJoinedCodes(new Set(codes));
 
-  const loadProfile = async () => {
-    if (!user?.id) return;
-    const { data } = await supabase
-      .from('profiles')
-      .select('username, email')
-      .eq('id', user.id)
-      .single();
-    if (data) setProfile(data);
-  };
-
-  // ---------------------------
-  // Deep-link JOIN = ?join=CODE
-  // ---------------------------
-  const [joinHandledCode, setJoinHandledCode] = useState(null);
-  useEffect(() => {
-    if (!authReady || !user) return;
-    const url = new URL(window.location.href);
-    const code = url.searchParams.get('join');
-    if (!code || joinHandledCode === code) return;
-
-    (async () => {
-      try {
-        const { data: exists } = await supabase
-          .from('contest_members')
-          .select('contest_code')
-          .eq('contest_code', code)
-          .eq('user_id', user.id)
-          .limit(1);
-
-        if (!exists || exists.length === 0) {
-          const { error: insErr } = await supabase
-            .from('contest_members')
-            .insert([{ contest_code: code, user_id: user.id }]);
-          if (insErr) throw insErr;
-        }
-
-        const { data: contest, error: cErr } = await supabase
-          .from('contests')
-          .select('name, code, rules')
-          .eq('code', code)
-          .single();
-        if (cErr || !contest) throw new Error('Concours introuvable');
-
-        toast('success', `Rejoint : ${contest.name}`);
-        setActiveContest(contest);
-        fetchContests();
-
-        url.searchParams.delete('join');
-        const clean = url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '');
-        window.history.replaceState({}, '', clean);
-      } catch (e) {
-        toast('error', e.message || 'Impossible de rejoindre le concours');
-      } finally {
-        setJoinHandledCode(code);
+      if (codes.length === 0) {
+        setContests([]);
+        return;
       }
-    })();
-  }, [authReady, user, joinHandledCode]);
 
-  // ---------------------------
-  // Actions
-  // ---------------------------
-  const joinContest = async () => {
-    if (!joinContestName) return;
-    try {
-      const { data: contest, error: findErr } = await supabase
+      // 2) Détails concours (⚠️ SANS "contest_members(count)")
+      const { data: list, error: cErr } = await supabase
         .from('contests')
-        .select('code, name, rules')
-        .eq('name', joinContestName)
-        .single();
-      if (findErr || !contest) throw new Error('Concours introuvable');
+        .select('name, code, type, region, max_participants, starts_at, ends_at')
+        .in('code', codes);
+      if (cErr) throw cErr;
 
-      const { error: insErr } = await supabase
-        .from('contest_members')
-        .insert([{ contest_code: contest.code, user_id: user.id }]);
-      if (insErr) throw insErr;
+      // 3) Comptes "participants" via RPC (bypasse RLS)
+      const { data: counts, error: rcErr } = await supabase
+        .rpc('members_count_bulk', { p_codes: codes });
+      if (rcErr) throw rcErr;
 
-      setJoinContestName('');
-      fetchContests();
-      toast('success', `Rejoint : ${contest.name}`);
+      const countMap = new Map((counts || []).map((r) => [r.contest_code, r.members]));
+      const hydrated = (list || []).map((c) => ({
+        ...c,
+        _members: countMap.get(c.code) ?? 0,
+      }));
+      setContests(hydrated);
     } catch (e) {
-      toast('error', e.message || 'Erreur rejoindre concours');
+      console.warn('fetch contests error', e);
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        if (!sess?.session) await supabase.auth.signOut();
+      } catch {}
+    } finally {
+      setIsLoadingContests(false);
     }
+  };
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      if (!cancelled) await fetchMyContests();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  // utils
+  const generateContestCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let out = '';
+    for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
   };
 
   const logout = async () => {
@@ -240,318 +147,315 @@ export default function App() {
       await supabase.auth.signOut();
     } finally {
       try {
-        if (typeof window !== 'undefined') sessionStorage.removeItem('fc_auth_dev_v1');
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('fc_auth_dev_v1'); // purge (fusion reset)
+        }
       } catch {}
       setUser(null);
       setActiveContest(null);
-      setCurrentPage('home');
+      setTab('home');
     }
   };
 
-  const goHome = () => {
-    setActiveContest(null);
-    setCurrentPage('home');
+  // actions
+  const createContest = async (form) => {
+    const name = form?.name?.trim();
+    if (!name) return;
+
+    try {
+      const code = generateContestCode();
+      const insert = {
+        name,
+        created_by: user.id,
+        code,
+        // nouveaux champs
+        type: form?.type || null,
+        region: form?.region || null,
+        is_public: !!form?.isPublic,
+        max_participants: form?.maxParticipants ?? null,
+        starts_at: form?.startsAt || null,
+        ends_at: form?.endsAt || null,
+        description: form?.description || null,
+        region_scope: form.regionScope,
+        region_label: form.regionScope === 'custom' ? form.regionLabel : null,
+        aappma_code: form.regionScope === 'aappma' ? form.aappmaCode : null,
+        max_participants: form.maxParticipants ?? null,
+        allow_join_before: !!form.allowJoinBefore,
+        allow_join_during: !!form.allowJoinDuring,
+      };
+
+      const { data: contest, error: createErr } = await supabase
+        .from('contests')
+        .insert([insert])
+        .select()
+        .single();
+      if (createErr) throw createErr;
+
+      const { error: memErr } = await supabase
+        .from('contest_members')
+        .insert([{ contest_code: contest.code, user_id: user.id }]);
+      if (memErr) throw memErr;
+
+      setOpenCreate(false);
+      setContests((prev) => [{ name: contest.name, code: contest.code }, ...prev]);
+      setActiveContest({ name: contest.name, code: contest.code });
+    } catch (e) {
+      alert(e.message || 'Erreur création concours');
+    }
+  };
+
+  const joinContest = async () => {
+    if (!joinContestName.trim()) return;
+    try {
+      const { data: contest, error: findErr } = await supabase
+        .from('contests')
+        .select('code, name, ends_at')
+        .eq('name', joinContestName.trim())
+        .single();
+      if (findErr || !contest) throw new Error('Concours introuvable');
+
+      // Blocage si terminé
+      if (contest.ends_at && Date.now() > new Date(contest.ends_at).getTime()) {
+        alert('Concours terminé : impossible de rejoindre.');
+        return;
+      }
+
+      const { error: insErr } = await supabase
+        .from('contest_members')
+        .insert([{ contest_code: contest.code, user_id: user.id }]);
+      if (insErr) throw insErr;
+
+      setJoinContestName('');
+      setOpenJoin(false);
+      setContests((prev) => [{ name: contest.name, code: contest.code }, ...prev]);
+      setActiveContest(contest);
+    } catch (e) {
+      alert(e.message || 'Erreur rejoindre concours');
+    }
   };
 
   // ---------------------------
-  // Utils: statut du concours + rang utilisateur (aperçu)
+  // UI
   // ---------------------------
-  const contestStatus = (rules) => {
-    const now = new Date();
-    const start = rules?.window?.start_at ? new Date(rules.window.start_at) : null;
-    const end = rules?.window?.end_at ? new Date(rules.window.end_at) : null;
-    if (start && now < start) return { key: 'upcoming', label: '🟠 Prochainement' };
-    if (end && now > end) return { key: 'ended', label: '🔴 Terminé' };
-    return { key: 'live', label: '🟢 Live' };
-  };
+  if (!authReady) return <div style={{ padding: 20 }}>Initialisation…</div>;
+  if (!user) return <Auth onLogin={setUser} />;
 
-  function MyContestCard({ contest }) {
-    const [meRank, setMeRank] = useState(null);
-    const [total, setTotal] = useState(null);
+  const HomeScreen = () => (
+    <div className="app-container" style={{ paddingBottom: 84 }}>
+      <header style={{ marginBottom: 14 }}>
+        <h1 style={{ fontSize: 26, lineHeight: '1.1' }}>
+          Bonjour {user.user_metadata?.desired_username || user.email}
+        </h1>
+        <div style={{ opacity: 0.8, marginTop: 6 }}>Qu’avez-vous pêché aujourd’hui ?</div>
+      </header>
 
-    useEffect(() => {
-      let cancelled = false;
-      const loadRank = async () => {
-        try {
-          const { data: c } = await supabase
-            .from('contests')
-            .select('rules')
-            .eq('code', contest.code)
-            .single();
-          const mode = c?.rules?.scoring_mode || 'total_points';
-          const moderation = !!c?.rules?.moderation_enabled;
+      <div style={{ display: 'grid', gap: 10 }}>
+        {contests.length === 0 && <div style={{ opacity: 0.7 }}>Aucun concours pour l’instant.</div>}
 
-          let q = supabase
-            .from('catches')
-            .select('user_id, points, size_cm, fish_name')
-            .eq('contest_code', contest.code);
-          if (moderation) q = q.eq('status', 'approved');
-          const { data: rows } = await q;
+        {contests.map((c) => {
+          const now = Date.now();
+          const s = c.starts_at ? new Date(c.starts_at).getTime() : null;
+          const e = c.ends_at ? new Date(c.ends_at).getTime() : null;
 
-          const by = new Map();
-          for (const r of rows || []) {
-            if (!by.has(r.user_id)) by.set(r.user_id, { points: 0, count: 0, max: null, sum: 0, n: 0 });
-            const u = by.get(r.user_id);
-            u.points += Number(r.points || 0);
-            u.count += 1;
-            const s = r.size_cm == null ? null : Number(r.size_cm);
-            if (s != null && !Number.isNaN(s)) {
-              u.max = u.max == null ? s : Math.max(u.max, s);
-              u.sum += s;
-              u.n += 1;
-            }
-          }
-          const arr = Array.from(by.entries()).map(([uid, v]) => ({
-            uid,
-            points: v.points,
-            count: v.count,
-            max: v.max == null ? -1 : v.max,
-            avg: v.n > 0 ? v.sum / v.n : -1,
-          }));
+          // état réel
+          const live =
+            (s && e && now >= s && now <= e) ||
+            (s && !e && now >= s) ||
+            (!s && e && now <= e);
+          const soon = !!(s && now < s);
+          const ended = !!(e && now > e);
+          const label = ended ? 'Terminé' : live ? 'Live' : soon ? 'Bientôt' : 'Ouvert';
 
-          let sorted;
-          if (mode === 'biggest_fish') {
-            sorted = arr.sort(
-              (a, b) =>
-                b.max - a.max ||
-                b.avg - a.avg ||
-                b.points - a.points ||
-                b.count - a.count
-            );
-          } else if (mode === 'count') {
-            sorted = arr.sort((a, b) => b.count - a.count || b.points - a.points);
-          } else {
-            sorted = arr.sort((a, b) => b.points - a.points || b.count - a.count);
-          }
+          const cap = c.max_participants ?? null;
+          const members = c._members ?? 0;
 
-          const rank = sorted.findIndex((x) => x.uid === user.id);
-          if (!cancelled) {
-            setTotal(sorted.length);
-            setMeRank(rank === -1 ? null : rank + 1);
-          }
-        } catch {
-          /* noop */
-        }
-      };
-      loadRank();
-      return () => {
-        cancelled = true;
-      };
-    }, [contest.code]);
-
-    return (
-      <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ display: 'grid' }}>
-          <div style={{ fontWeight: 700 }}>{contest.name}</div>
-          <div className="kpi">{contestStatus(contest.rules).label}</div>
-        </div>
-        <div className="kpi">
-          {meRank ? (
-            <>
-              Ta position : <strong>#{meRank}</strong> {total ? <>/ {total}</> : null}
-            </>
-          ) : (
-            'Pas encore classé'
-          )}
-        </div>
-        <div className="btn-group">
-          <button className="btn btn-primary" onClick={() => setActiveContest(contest)}>Ouvrir</button>
-        </div>
+          return (
+            <Card key={c.code}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>{c.name}</div>
+                <div
+                  style={{
+                    color: ended ? '#6b7280' : live ? '#16a34a' : soon ? '#f59e0b' : '#16a34a',
+                    fontWeight: 700,
+                  }}
+                >
+                  {label}
+                </div>
+              </div>
+              <div style={{ marginTop: 6, fontSize: 13, opacity: 0.85 }}>
+                {c.type ? `Type : ${labelType(c.type)} · ` : ''}
+                {c.region || 'Région N/A'}
+              </div>
+              <div style={{ marginTop: 4, fontSize: 13, opacity: 0.9 }}>
+                {cap ? `${members}/${cap} inscrits` : `${members} inscrits`}
+              </div>
+              <div style={{ marginTop: 10, display: 'flex', gap: 10 }}>
+                <button onClick={() => setActiveContest(c)} className="btn primary">
+                  Ouvrir
+                </button>
+                <button onClick={() => setOpenInvite(true)} className="btn" title="Inviter">
+                  👤➕ Inviter
+                </button>
+              </div>
+            </Card>
+          );
+        })}
       </div>
-    );
-  }
 
-  // ---------------------------
-  // UI helpers
-  // ---------------------------
-  const Toasts = () => (
-    <div style={{ position: 'fixed', top: 16, right: 16, display: 'grid', gap: 8, zIndex: 9999, width: 'min(92vw, 360px)' }}>
-      {toasts.map((t) => {
-        const cls =
-          t.type === 'success'
-            ? 'alert alert-success'
-            : t.type === 'error'
-            ? 'alert alert-error'
-            : 'alert';
-        return (
-          <div key={t.id} className={cls}>
-            {t.message}
-          </div>
-        );
-      })}
+      <div className="home-cta-bar">
+        <button className="btn primary" onClick={() => setOpenCreate(true)}>
+          Créer +
+        </button>
+        <button className="btn" onClick={() => setOpenJoin(true)}>
+          Rejoindre
+        </button>
+      </div>
     </div>
   );
 
-  const HomeHeader = () => (
-    <NavBar
-      onHome={goHome}
-      onCatches={() => setCurrentPage('mycatches')}
-      onInvite={() => setCurrentPage('invite')}
-      onProfile={() => setCurrentPage('profile')}
-      onReset={hardResetSession}
-      onLogout={logout}
-    />
+  // util local pour les labels (même mapping que Discover/Contest)
+  function labelType(t) {
+    switch ((t || '').toLowerCase()) {
+      case 'carna':
+        return 'Carnassier';
+      case 'carpe':
+        return 'Carpe';
+      case 'blanc':
+        return 'Blanc';
+      case 'expert':
+        return 'Pro Multi-espèces';
+      default:
+        return 'Perso';
+    }
+  }
+
+  // Bouton Déconnexion (affiché UNIQUEMENT sur Profil)
+  const topRightLogout = (
+    <div style={{ position: 'fixed', right: 14, top: 14, zIndex: 5 }}>
+      <button className="btn danger" onClick={logout}>
+        Déconnexion
+      </button>
+    </div>
   );
-
-  // ---------------------------
-  // Rendus conditionnels
-  // ---------------------------
-  if (!authReady) return <div className="container"><h3>Initialisation…</h3></div>;
-
-  if (!user) {
-    return (
-      <div>
-        <Auth onLogin={setUser} />
-        <Toasts />
-      </div>
-    );
-  }
-
-  if (currentPage === 'config') {
-    return (
-      <>
-        <HomeHeader />
-        <div className="container">
-          <ContestConfig
-            user={user}
-            draftName={draftContestName}
-            onCancel={() => setCurrentPage('home')}
-            onCreated={() => {
-              setNewContestName('');
-              setDraftContestName('');
-              setCurrentPage('home');
-              fetchContests();
-              loadProfile();
-              toast('success', 'Concours créé ✅');
-            }}
-          />
-        </div>
-        <Toasts />
-      </>
-    );
-  }
-
-  if (currentPage === 'mycatches') {
-    return (
-      <>
-        <HomeHeader />
-        <div className="container">
-          <MyCatches user={user} />
-        </div>
-        <Toasts />
-      </>
-    );
-  }
-
-  if (currentPage === 'invite') {
-    return (
-      <>
-        <HomeHeader />
-        <div className="container">
-          <InvitePage user={user} />
-        </div>
-        <Toasts />
-      </>
-    );
-  }
-
-  if (currentPage === 'profile') {
-    return (
-      <>
-        <HomeHeader />
-        <div className="container">
-          <ProfilePage user={user} />
-        </div>
-        <Toasts />
-      </>
-    );
-  }
-
-  if (activeContest) {
-    return (
-      <>
-        <HomeHeader />
-        <div className="container">
-          <button className="btn btn-ghost" onClick={goHome}>← Retour</button>
-          <div style={{ height: 8 }} />
-          <ContestPage user={user} contest_code={activeContest.code} />
-        </div>
-        <Toasts />
-      </>
-    );
-  }
-
-  // Accueil (Mes concours + Créer/Rejoindre)
-  const withStatus = contests.map((c) => ({ ...c, _status: contestStatus(c.rules).key }));
-  const order = { live: 0, upcoming: 1, ended: 2 };
-  const sorted = withStatus.sort((a, b) => order[a._status] - order[b._status] || a.name.localeCompare(b.name));
 
   return (
     <>
-      <HomeHeader />
-      <div className="container">
-        <h1>Bonjour {profile?.username ? profile.username : user.email}</h1>
+      {/* 🔒 N’AFFICHE PAS le bouton ici globalement */}
+      {/* {topRightLogout} */}
 
-        <div className="grid grid-2">
-          {/* Créer un concours */}
-          <div className="card">
-            <h2 style={{ marginTop: 0 }}>Créer un concours</h2>
-            <div className="grid">
-              <input
-                className="input"
-                placeholder="Nom du concours"
-                value={newContestName}
-                onChange={(e) => setNewContestName(e.target.value)}
-              />
-              <div className="btn-group">
-                <button
-                  className="btn btn-primary"
-                  onClick={() => {
-                    if (!newContestName.trim()) {
-                      toast('error', 'Indique un nom de concours.');
-                      return;
-                    }
-                    setDraftContestName(newContestName.trim());
-                    setCurrentPage('config');
-                  }}
-                >
-                  Configurer
-                </button>
-              </div>
-            </div>
-          </div>
+      {!activeContest && tab === 'home' && <HomeScreen />}
 
-          {/* Rejoindre un concours */}
-          <div className="card">
-            <h2 style={{ marginTop: 0 }}>Rejoindre un concours</h2>
-            <div className="grid">
-              <input
-                className="input"
-                placeholder="Nom du concours"
-                value={joinContestName}
-                onChange={(e) => setJoinContestName(e.target.value)}
-              />
-              <div className="btn-group">
-                <button className="btn btn-outline" onClick={joinContest}>Rejoindre</button>
-              </div>
-            </div>
-          </div>
+      {!activeContest && tab === 'discover' && (
+        <div className="app-container" style={{ paddingBottom: 84 }}>
+          <DiscoverPage
+            user={user}
+            joinedCodes={new Set(contests.map((c) => c.code))}
+            onJoined={async () => {
+              await fetchMyContests();
+              setTab('home');
+            }}
+            onOpenCreate={() => setOpenCreate(true)}
+          />
         </div>
+      )}
 
-        {/* Mes concours */}
-        <div style={{ height: 12 }} />
-        <h2>Mes concours</h2>
-        {sorted.length === 0 ? (
-          <p className="kpi">Aucun concours pour l’instant</p>
-        ) : (
-          <div className="grid" style={{ gap: 12 }}>
-            {sorted.map((c) => (
-              <MyContestCard key={c.code} contest={c} />
-            ))}
-          </div>
-        )}
-      </div>
-      <Toasts />
+      {!activeContest && tab === 'activity' && (
+        <div className="app-container" style={{ paddingBottom: 84 }}>
+          <ActivityPage />
+        </div>
+      )}
+
+      {!activeContest && tab === 'profile' && (
+        <div className="app-container" style={{ paddingBottom: 84 }}>
+          {/* ✅ Bouton visible UNIQUEMENT sur l’onglet Profil */}
+          {topRightLogout}
+          <ProfilePage user={user} />
+        </div>
+      )}
+
+      {activeContest && (
+        <div className="app-container" style={{ paddingBottom: 84 }}>
+          <button className="btn" onClick={() => setActiveContest(null)} style={{ marginBottom: 10 }}>
+            ← Retour
+          </button>
+          <ContestPage
+            user={user}
+            contest_code={activeContest.code}
+            onLeftContest={async () => {
+              setActiveContest(null);
+              await fetchMyContests();
+              setTab('home');
+            }}
+          />
+        </div>
+      )}
+
+      {/* Bottom nav */}
+      <BottomNav
+        tab={tab}
+        onChange={(id) => {
+          setActiveContest(null);
+          setTab(id);
+        }}
+      />
+
+      {/* Modales */}
+      <Modal open={openCreate} title="Créer un concours" onClose={() => setOpenCreate(false)}>
+        <CreateContestWizard onCancel={() => setOpenCreate(false)} onSubmit={createContest} />
+      </Modal>
+
+      <Modal open={openJoin} title="Rejoindre un concours" onClose={() => setOpenJoin(false)}>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <input
+            placeholder="Nom du concours"
+            value={joinContestName}
+            onChange={(e) => setJoinContestName(e.target.value)}
+          />
+          <button className="btn primary" onClick={joinContest}>
+            Rejoindre
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={openInvite} title="Inviter des amis" onClose={() => setOpenInvite(false)}>
+        <InviteContent />
+      </Modal>
     </>
+  );
+}
+
+// --- contenu invite ---
+function InviteContent() {
+  const [copied, setCopied] = useState(false);
+  const appLink = typeof window !== 'undefined' ? `${window.location.origin}/` : '';
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(appLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      alert('Impossible de copier le lien.');
+    }
+  };
+
+  const sendMail = () => {
+    const subject = encodeURIComponent('Rejoins mon appli de concours de pêche !');
+    const body = encodeURIComponent(`Salut !\n\nRejoins-nous ici : ${appLink}\n\nÀ+`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      <input readOnly value={appLink} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn primary" onClick={copy}>
+          {copied ? 'Lien copié ✅' : 'Copier le lien'}
+        </button>
+        <button className="btn" onClick={sendMail}>
+          Envoyer par e-mail
+        </button>
+      </div>
+    </div>
   );
 }

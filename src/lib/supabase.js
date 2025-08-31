@@ -28,4 +28,3 @@ export function startAuthKeepAlive() {
 
 console.log("SUPABASE_URL:", SUPABASE_URL ? "✅ OK" : "❌ MISSING");
 console.log("SUPABASE_KEY:", SUPABASE_ANON_KEY ? "✅ OK" : "❌ MISSING");
-
