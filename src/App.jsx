@@ -46,7 +46,7 @@ export default function App() {
   const [joinContestName, setJoinContestName] = useState('');
 
   // états liste concours
-  const [joinedCodes, setJoinedCodes] = useState(new Set()); // Set des codes auxquels je participe
+  const [joinedCodes, setJoinedCodes] = useState(new Set());
   const [isLoadingContests, setIsLoadingContests] = useState(false);
 
   // ---------------------------
@@ -74,7 +74,9 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // fetch mes concours
+  // ---------------------------
+  // Fetch : mes concours
+  // ---------------------------
   const fetchMyContests = async () => {
     try {
       setIsLoadingContests(true);
@@ -94,7 +96,7 @@ export default function App() {
         return;
       }
 
-      // 2) Détails concours (⚠️ SANS "contest_members(count)")
+      // 2) Détails concours (sans jointure count fragile)
       const { data: list, error: cErr } = await supabase
         .from('contests')
         .select('name, code, type, region, max_participants, starts_at, ends_at')
@@ -134,7 +136,9 @@ export default function App() {
     };
   }, [user?.id]);
 
-  // utils
+  // ---------------------------
+  // Utils
+  // ---------------------------
   const generateContestCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let out = '';
@@ -148,7 +152,7 @@ export default function App() {
     } finally {
       try {
         if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('fc_auth_dev_v1'); // purge (fusion reset)
+          sessionStorage.removeItem('fc_auth_dev_v1');
         }
       } catch {}
       setUser(null);
@@ -157,7 +161,9 @@ export default function App() {
     }
   };
 
-  // actions
+  // ---------------------------
+  // Actions
+  // ---------------------------
   const createContest = async (form) => {
     const name = form?.name?.trim();
     if (!name) return;
@@ -179,7 +185,6 @@ export default function App() {
         region_scope: form.regionScope,
         region_label: form.regionScope === 'custom' ? form.regionLabel : null,
         aappma_code: form.regionScope === 'aappma' ? form.aappmaCode : null,
-        max_participants: form.maxParticipants ?? null,
         allow_join_before: !!form.allowJoinBefore,
         allow_join_during: !!form.allowJoinDuring,
       };
@@ -257,7 +262,6 @@ export default function App() {
           const s = c.starts_at ? new Date(c.starts_at).getTime() : null;
           const e = c.ends_at ? new Date(c.ends_at).getTime() : null;
 
-          // état réel
           const live =
             (s && e && now >= s && now <= e) ||
             (s && !e && now >= s) ||
@@ -313,7 +317,6 @@ export default function App() {
     </div>
   );
 
-  // util local pour les labels (même mapping que Discover/Contest)
   function labelType(t) {
     switch ((t || '').toLowerCase()) {
       case 'carna':
@@ -329,7 +332,7 @@ export default function App() {
     }
   }
 
-  // Bouton Déconnexion (affiché UNIQUEMENT sur Profil)
+  // Bouton Déconnexion (uniquement sur Profil)
   const topRightLogout = (
     <div style={{ position: 'fixed', right: 14, top: 14, zIndex: 5 }}>
       <button className="btn danger" onClick={logout}>
@@ -340,9 +343,6 @@ export default function App() {
 
   return (
     <>
-      {/* 🔒 N’AFFICHE PAS le bouton ici globalement */}
-      {/* {topRightLogout} */}
-
       {!activeContest && tab === 'home' && <HomeScreen />}
 
       {!activeContest && tab === 'discover' && (
@@ -367,7 +367,6 @@ export default function App() {
 
       {!activeContest && tab === 'profile' && (
         <div className="app-container" style={{ paddingBottom: 84 }}>
-          {/* ✅ Bouton visible UNIQUEMENT sur l’onglet Profil */}
           {topRightLogout}
           <ProfilePage user={user} />
         </div>
@@ -390,7 +389,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Bottom nav */}
       <BottomNav
         tab={tab}
         onChange={(id) => {
@@ -458,3 +456,4 @@ function InviteContent() {
       </div>
     </div>
   );
+}
