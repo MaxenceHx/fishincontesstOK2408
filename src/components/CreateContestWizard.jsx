@@ -51,7 +51,7 @@ function CreateContestWizard({ onCancel, onSubmit }) {
       maxParticipants: maxParticipants ? Number(maxParticipants) : null,
       allowJoinBefore, allowJoinDuring
     });
-  });
+  };
 };
 
 return (
@@ -267,7 +267,6 @@ return (
     </form>
   </div>
 );
-}
 
 function StepDot({ active, current, label, num }) {
   return (
